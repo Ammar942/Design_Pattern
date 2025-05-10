@@ -1,0 +1,240 @@
+export type ToastVariant = "success" | "error" | "warning" | "info";
+
+export interface NotificationOptions {
+  type?: ToastVariant;
+  duration?: number;
+  position?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  message: string;
+}
+
+class NotificationManager {
+  private static isStyleInjected = false;
+  private static containers: Record<string, HTMLDivElement> = {};
+  private static defaultSettings: Partial<NotificationOptions> = {
+    type: "info",
+    duration: 3000,
+    position: "top-right",
+  };
+
+  private static injectStyles() {
+    if (this.isStyleInjected) return;
+    this.isStyleInjected = true;
+
+    const style = document.createElement("style");
+    style.textContent = `
+.toast-wrapper {
+  position: fixed;
+  z-index: 1050;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.toast-wrapper.top-right { top: 1rem; right: 1rem; }
+.toast-wrapper.top-left { top: 1rem; left: 1rem; }
+.toast-wrapper.bottom-right { bottom: 1rem; right: 1rem; }
+.toast-wrapper.bottom-left { bottom: 1rem; left: 1rem; }
+
+.toast-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #fff;
+  border: 5px solid transparent;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 0.75rem 1rem;
+  min-width: 280px;
+  max-width: 420px;
+  color: #111827;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  transition: all 0.25s ease;
+  pointer-events: auto;
+}
+
+.toast-box.success { border-left-color: #22c55e; }
+.toast-box.error { border-left-color: #ef4444; }
+.toast-box.warning { border-left-color: #facc15; }
+.toast-box.info { border-left-color: #3b82f6; }
+
+.toast-icon {
+  font-size: 1.25rem;
+  margin-right: 0.75rem;
+}
+
+.toast-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toast-dismiss {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 1.25rem;
+  cursor: pointer;
+  margin-left: 1rem;
+  transition: color 0.2s ease;
+}
+
+.toast-dismiss:hover {
+  color: #111827;
+}
+
+.toast-fade-in-top {
+  animation: slideFadeInTop 250ms ease forwards;
+}
+
+.toast-fade-in-bottom {
+  animation: slideFadeInBottom 250ms ease forwards;
+}
+
+.toast-fade-out-top {
+  animation: slideFadeOutTop 250ms ease forwards;
+}
+
+.toast-fade-out-bottom {
+  animation: slideFadeOutBottom 250ms ease forwards;
+}
+
+@keyframes slideFadeInTop {
+  0% { opacity: 0; transform: translateY(-100%) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes slideFadeInBottom {
+  0% { opacity: 0; transform: translateY(100%) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes slideFadeOutTop {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-50%) scale(0.9); }
+}
+@keyframes slideFadeOutBottom {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(50%) scale(0.9); }
+}
+`;
+    document.head.appendChild(style);
+  }
+
+  private static createWrapper(position: string): HTMLDivElement {
+    const wrapper = document.createElement("div");
+    wrapper.className = `toast-wrapper ${position}`;
+    document.body.appendChild(wrapper);
+    this.containers[position] = wrapper;
+    return wrapper;
+  }
+
+  private static getWrapper(position: string): HTMLDivElement {
+    return this.containers[position] || this.createWrapper(position);
+  }
+
+  private static getVariantClass(type: ToastVariant): string {
+    return `toast-box ${type}`;
+  }
+
+  private static getIconMarkup(type: ToastVariant): string {
+    switch (type) {
+      case "success":
+        return "✅";
+      case "error":
+        return "❌";
+      case "warning":
+        return "⚠️";
+      case "info":
+      default:
+        return "ℹ️";
+    }
+  }
+
+  public static display(settings: NotificationOptions): void {
+    this.injectStyles();
+    const { type, duration, position, message } = {
+      ...this.defaultSettings,
+      ...settings,
+    };
+
+    const wrapper = this.getWrapper(position!);
+    const toast = document.createElement("div");
+    toast.className = this.getVariantClass(type!);
+    toast.classList.add(
+      position!.includes("top") ? "toast-fade-in-top" : "toast-fade-in-bottom"
+    );
+
+    const contentWrapper = document.createElement("div");
+    contentWrapper.className = "toast-content";
+
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "toast-icon";
+    iconSpan.innerHTML = this.getIconMarkup(type!);
+
+    const messageSpan = document.createElement("span");
+    messageSpan.textContent = message;
+
+    contentWrapper.appendChild(iconSpan);
+    contentWrapper.appendChild(messageSpan);
+    toast.appendChild(contentWrapper);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "toast-dismiss";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.onclick = () => this.dismiss(wrapper, toast, position!);
+
+    toast.appendChild(closeBtn);
+    wrapper.appendChild(toast);
+
+    setTimeout(() => this.dismiss(wrapper, toast, position!), duration);
+  }
+
+  private static dismiss(
+    wrapper: HTMLDivElement,
+    toast: HTMLDivElement,
+    position: string
+  ): void {
+    toast.classList.remove("toast-fade-in-top", "toast-fade-in-bottom");
+    toast.classList.add(
+      position.includes("top") ? "toast-fade-out-top" : "toast-fade-out-bottom"
+    );
+
+    setTimeout(() => {
+      toast.remove();
+      if (wrapper.children.length === 0) {
+        wrapper.remove();
+        delete this.containers[position];
+      }
+    }, 300);
+  }
+
+  public static success(
+    message: string,
+    options?: Partial<NotificationOptions>
+  ): void {
+    this.display({ ...options, type: "success", message });
+  }
+
+  public static error(
+    message: string,
+    options?: Partial<NotificationOptions>
+  ): void {
+    this.display({ ...options, type: "error", message });
+  }
+
+  public static warning(
+    message: string,
+    options?: Partial<NotificationOptions>
+  ): void {
+    this.display({ ...options, type: "warning", message });
+  }
+
+  public static info(
+    message: string,
+    options?: Partial<NotificationOptions>
+  ): void {
+    this.display({ ...options, type: "info", message });
+  }
+}
+
+export default NotificationManager;
